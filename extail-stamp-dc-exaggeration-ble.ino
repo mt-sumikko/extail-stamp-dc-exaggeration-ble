@@ -912,13 +912,14 @@ void printEvent(sensors_event_t *event)
     Serial.print("Unk:");
   }
 
-  String str = "X:" + String(x) + "," + "Y:" + String(y) + "," + "Z:" + String(z);
+  //String str = "X:" + String(x) + "," + "Y:" + String(y) + "," + "Z:" + String(z);
   // Serial.println(str);
+  String str = "accX:" + String(accX) + "," + "roll:" + String(roll);
 
   //Serial.println(x);
   if (deviceConnected) { //接続されていたら
     // 送信する値（仮の値）
-    /*uint8_t*/String valueToSend = String(roll);
+    /*uint8_t*/String valueToSend = String(str);
 
     // BLE通知を行う
     pNotifyCharacteristic->setValue(valueToSend);
