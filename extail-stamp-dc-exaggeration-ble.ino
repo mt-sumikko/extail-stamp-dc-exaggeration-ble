@@ -1,4 +1,5 @@
 /*MultiTaskにextail-stamp-exaggeration-dcを移植してstamp仕様のMultiTaskで動かしたソース
+  BLE通信モニタリング機能（stampが送信側）を搭載　LEDのソースはextail-device-stamppico-bleを参照
 *******************************************************************************
   Copyright (c) 2021 by M5Stack
                    Equipped with STAMP-PICO sample source code
@@ -11,7 +12,12 @@
 *******************************************************************************
 */
 #include <Arduino.h>
+#include <NimBLEDevice.h> //BLE
+#include <FastLED.h> //LED
 
+#define Button 39
+static bool btnState;//Default:1, Pressed:0
+static bool btnState_old;
 
 // *--- 9軸センサ BNO055 ---
 #include <Wire.h>
@@ -28,6 +34,9 @@ Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire);
 sensors_event_t orientationData, angVelocityData, linearAccelData, magnetometerData, accelerometerData, gravityData;
 
 
+//BLE test
+String sampleText[] = {"GoodMorning", "Hello", "GoodBye", "GoodNight"};
+uint8_t FSM = 0;    //Store the number of key presses.  存储按键按下次数
 
 // *--- DC motor ---
 #define IN1 32 // モーター1正転信号端子
@@ -72,7 +81,43 @@ int roll_diff_th_max = 20;
 // 誇張係数（未使用）
 int expand = 1;
 
-bool back = false; // ホームポジションに戻す状態か
+bool back = false; // ホームポジションに戻す状態か（まだ仕込めてない）
+
+
+// ## BLE
+// See the following for generating UUIDs:
+// https://www.uuidgenerator.net/
+
+#define LOCAL_NAME "Extail_DEVICE"
+#define COMPLETE_LOCAL_NAME "Extail_DEVICE_LOCAL_NAME" //接続する時に使用するデバイス名
+#define SERVICE_UUID "3c3996e0-4d2c-11ed-bdc3-0242ac120002" //ServiceのUUID
+#define CHARACTERISTIC_UUID "3c399a64-4d2c-11ed-bdc3-0242ac120002" //CharacteristicのUUID
+#define CHARACTERISTIC_UUID_NOTIFY "3c399c44-4d2c-11ed-bdc3-0242ac120002" //通知を行うためのCharacteristicのUUID
+
+NimBLECharacteristic *pNotifyCharacteristic; //Characteristic
+NimBLEServer *pServer = NULL; //NimBLEServer
+
+bool deviceConnected = false;
+bool oldDeviceConnected = false;
+//uint8_t data_buff[2]; //データ通知用バッファ
+
+// ### 心拍系
+//BLE通信で送られてきた値をintに直して保管（初期値は標準的な値）
+int volume = 0;
+bool flag_volume = false;
+
+
+// *--- LED ---
+// How many leds in your strip?
+#define NUM_LEDS 1
+#define DATA_PIN 27
+#define BRIGHTNESS 2
+
+// Define the array of leds
+CRGB leds[NUM_LEDS];
+
+//LED点灯タスクを渡す変数
+int ledTask = 0;
 
 
 
@@ -90,24 +135,297 @@ void task1(void * pvParameters) { //Define the tasks to be executed in thread 1.
 
 void task2(void * pvParameters) {
   while (1) {
-    //Serial.print("task2 Uptime (ms): ");
-    //Serial.println(millis());
-    delay(200);
+
+
+    //このままだと眩しすぎるから光量調整しておきたいな
+    switch (ledTask)
+    {
+      case 1:
+        leds[0] = CRGB::Green;//緑
+        break;
+
+      case 2:
+        leds[0] = CRGB::Blue; //青
+        break;
+
+      case 3:
+        leds[0] = CRGB::Red;//赤
+        break;
+
+      case 4:
+        leds[0] = CRGB::White; //白
+        break;
+
+      case 5: //これちゃんと点滅するんか？ してないわ
+        leds[0] = CRGB::Yellow; //黄
+        break;
+
+      default:
+        //適度に待つ
+        delay(100);
+        continue; // スイッチ内で待ち時間がない場合は、次のループに進むようにcontinueを追加
+    }
+
+    FastLED.show();
+    delay(1000);
+    leds[0] = CRGB::Black; //消灯
+    FastLED.show();
+    ledTask = 0; // 共通処理なので、ここでリセット
+
+
   }
 }
 
 void task3(void * pvParameters) {
   while (1) {
-    //Serial.print("task3 Uptime (ms): ");
-    //Serial.println(millis());
-    delay(1000);
+    btnState = digitalRead(Button);
+    if (btnState == 0 && btnState_old == 1) {
+      Serial.printf("Button Pressed", btnState);
+      Serial.println("");
+
+
+      if (deviceConnected) { //接続されていたら
+        // 送信する値（仮の値）
+        /*uint8_t*/String valueToSend = sampleText[FSM];
+
+        // BLE通知を行う
+        pNotifyCharacteristic->setValue(valueToSend);
+        pNotifyCharacteristic->notify();
+
+        Serial.print("send");
+        Serial.println(valueToSend);
+      }
+
+      FSM++;
+      if (FSM >= 4) {
+        FSM = 0;
+      }
+
+
+
+
+    }
+    delay(10);
+    btnState_old = btnState;
   }
 }
+
+
+
+
+// *--- BLE ---
+
+
+
+//接続、切断などのメソッドは後にsetupメソッドにてコールバックの形でセットするのでひとまとめにしておきます
+class ServerCallbacks : public NimBLEServerCallbacks
+{
+    //接続時
+    void onConnect(NimBLEServer *pServer)
+    {
+      Serial.println("Client connected");
+      deviceConnected = true;
+    };
+
+    /* //SecurytyRequestをペリフェラルから送るとき
+      void onConnect(NimBLEServer* pServer, ble_gap_conn_desc* desc) {
+       Serial.print("Client address: ");
+       Serial.println(NimBLEAddress(desc->peer_ota_addr).toString().c_str());
+
+       NimBLEDevice::startSecurity(desc->conn_handle);
+
+       pServer->updateConnParams(desc->conn_handle, 24, 48, 0, 60);
+       deviceConnected = true;
+      };*/
+
+    //切断時
+    void onDisconnect(NimBLEServer *pServer)
+    {
+      Serial.println("Client disconnected - start advertising");
+      deviceConnected = false;
+      NimBLEDevice::startAdvertising();
+    };
+    void onMTUChange(uint16_t MTU, ble_gap_conn_desc *desc)
+    {
+      Serial.printf("MTU updated: %u for connection ID: %u\n", MTU, desc->conn_handle);
+    };
+    // Passのリクエスト
+    uint32_t onPassKeyRequest()
+    { /**これは、セキュリティのために6桁のランダムな番号を返す必要があります。
+         または、ここにあるように、独自の静的パスキーを作成します。
+      */
+      Serial.println("Server Passkey Request");
+      return 123456;
+    };
+    //確認
+    bool onConfirmPIN(uint32_t pass_key)
+    { /** パスキーが一致しない場合は、falseを返します。*/
+      Serial.print("The passkey YES/NO number: ");
+      Serial.println(pass_key);
+      return true;
+    };
+    //認証完了時の処理
+    void onAuthenticationComplete(ble_gap_conn_desc *desc)
+    { /** 暗号化が成功したかどうかを確認し、成功しなかった場合はクライアントを切断する */
+      if (!desc->sec_state.encrypted)
+      {
+        NimBLEDevice::getServer()->disconnect(desc->conn_handle);
+        Serial.println("Encrypt connection failed - disconnecting client");
+        return;
+      }
+      Serial.println("Starting BLE work!");
+    };
+};
+
+//特性アクションのハンドラクラス
+//BLE Rceive　セントラル側からのwriteやnotifyでペリフェラル側から通知などの処理もクラスにしておきます。
+class CharacteristicCallbacks : public BLECharacteristicCallbacks
+{
+    void onWrite(BLECharacteristic *pCharacteristic)
+    {
+      std::string rxValue = pCharacteristic->getValue();
+      if (rxValue.length() > 0)
+      {
+        String rxValue_string = rxValue.c_str();//std::stringはそのままではprintf()で表示できません。表示するには.c_str()で変換します。
+        Serial.print("received: ");
+        Serial.println(rxValue_string);
+
+        //pNotifyCharacteristic->setValue(rxValue_string);//これはAtom側でreceive(iOSからAtomへの書き込み)成功したらその値をiOSに送り直すやつ、つまり確認用途であり、必須では無い。
+        //pNotifyCharacteristic->notify();
+
+
+        // メッセージの処理が終了したことを示すフラグ
+        boolean noMoreEvent = false;
+
+        // メッセージの処理が終了するまで以下を繰り返す
+        while (!noMoreEvent)
+        {
+
+          //①受信した文字列の中で「>」を探す
+          detectReceivedDataType(noMoreEvent, rxValue, ">");//要件的には要らないけど、これが無いと異常に受信してしまう？？
+          detectReceivedDataType(noMoreEvent, rxValue, "*");//【volume用】
+        }
+      }
+    }
+
+    /** 通知または表示が送信される前に呼び出されます、
+      必要であれば、送信前にここで値を変更することができます。
+    */
+    /* void onNotify(NimBLECharacteristic* pCharacteristic) {
+       Serial.println("Sending notification to clients");
+      };*/
+};
+
+
+void detectReceivedDataType(boolean& noMoreEvent, std::string rxValue, String index_str) {
+  //noMoreEventは参照渡しにすることで、関数内での変数値の変更が 呼び出し元の変数に反映されるようにする必要がある。
+  //そうしないと呼び出し元の onWrite 関数におけるnoMoreEventの値は更新されないので、無限ループに陥ってしまう
+  int from = 0;
+  int index = rxValue.find(index_str.c_str(), from);
+  Serial.println("detect" + index);
+  // もし見つからなければ
+  if (index < 0)
+  {
+    // 処理が終了したと判断してフラグをセット
+    noMoreEvent = true;
+    volume = 0;
+    flag_volume = false;
+    Serial.println("end");
+  }
+  // もし見つかったら
+  else
+  {
+    // 次に処理する読み取り開始位置を更新
+    from = index + 1;
+    // '*'以降の数字文字列を取り出す
+    const char* valuePtr = rxValue.c_str() + index + 1;
+    volume = atoi(valuePtr);
+    flag_volume = true;
+    Serial.println("volume: " + String(volume));//ここで数字拾うだけだと loopの中で直近の1以上の値を持ち続けてしまう？
+  }
+
+}
+
+
+// BLE loop
+void loopBLE()
+{
+  // disconnecting
+  if (!deviceConnected && oldDeviceConnected)
+  {
+    delay(500); //ブルートゥーススタックに準備の機会を与える
+
+    pServer->startAdvertising();//アドバタイズを再開する
+    Serial.println("restartAdvertising");
+
+    oldDeviceConnected = deviceConnected;
+    Serial.println("DisConnected");
+  }
+
+  // connecting
+  if (deviceConnected && !oldDeviceConnected)
+  {
+    // do stuff here on connecting
+    oldDeviceConnected = deviceConnected;
+    Serial.println("Connected");
+  }
+}
+
 
 void setup() {
   Serial.begin(115200);
 
-  //DCモータ
+  FastLED.addLeds<SK6812, DATA_PIN, GRB>(leds, NUM_LEDS);  // GRB ordering is typical
+  FastLED.setBrightness(BRIGHTNESS);
+
+  delay(10);
+  leds[0] = CRGB::Green;
+  FastLED.show();
+  delay(50);
+
+  Serial.println("Setup BLE....");
+
+  Serial.println("Starting NimBLE Server");
+  NimBLEDevice::init(COMPLETE_LOCAL_NAME); //デバイス名（CompleteLocalName）のセット
+
+  //オプション：送信電力を設定、デフォルトは3db
+  NimBLEDevice::setPower(ESP_PWR_LVL_P9);// +9db
+
+  //セキュリティセッティング
+  NimBLEDevice::setSecurityAuth(true, true, true);
+
+  NimBLEDevice::setSecurityPasskey(123456); //PassKeyのセット
+  NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_ONLY); //パラメータでディスプレイ有りに設定
+  NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT); //パラメータでInOut無しに設定
+  pServer = NimBLEDevice::createServer();
+  pServer->setCallbacks(new ServerCallbacks());
+
+  NimBLEService *pService = pServer->createService(SERVICE_UUID);
+
+  //RxCharacteristic
+  NimBLECharacteristic *pRxCharacteristic = pService->createCharacteristic(CHARACTERISTIC_UUID, NIMBLE_PROPERTY::WRITE);
+
+  //NotifyCharacteristic
+  pNotifyCharacteristic = pService->createCharacteristic(CHARACTERISTIC_UUID_NOTIFY, NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::READ_ENC | NIMBLE_PROPERTY::READ_AUTHEN); //Need Enc Authen
+
+  pRxCharacteristic->setCallbacks(new CharacteristicCallbacks()); //RxCharacteristicにコールバックをセット
+  pService->start();//Serivice開始
+  NimBLEAdvertising *pNimBleAdvertising = NimBLEDevice::getAdvertising();//アドバタイズの設定
+  pNimBleAdvertising->addServiceUUID(SERVICE_UUID);//アドバタイズするUUIDのセット
+  pNimBleAdvertising->addTxPower();//アドバタイズにTxPowerセット
+
+  NimBLEAdvertisementData advertisementData;//アドバタイズデータ作成
+  advertisementData.setName(COMPLETE_LOCAL_NAME);//アドバタイズにCompleteLoacaNameセット
+  advertisementData.setManufacturerData("NORA");//アドバタイズのManufactureSpecificにデータセット
+  pNimBleAdvertising->setScanResponse(true);//ScanResponseを行う
+  pNimBleAdvertising->setScanResponseData(advertisementData);//ScanResponseにアドバタイズデータセット
+  pNimBleAdvertising->start();//アドバタイズ開始
+  Serial.println("first startAdvertising");
+
+  //Button
+  pinMode(Button, INPUT);
+
+  // *--- DC motor ---
   pinMode(IN1, OUTPUT);             // PWM出力端子（INT1：正転用）を出力設定
   pinMode(IN2, OUTPUT);             // PWM出力端子（INT2：逆転用）を出力設定
   ledcSetup(CH_IN1, FREQ, BIT_NUM); // PWM出力設定（チャンネル, 周波数, bit数）
@@ -118,13 +436,13 @@ void setup() {
 
   // Creat Task1.  创建线程1
   xTaskCreatePinnedToCore(
-    task1,     //Function to implement the task.  线程对应函数名称(不能有返回值)
-    "task1",   //线程名称
-    4096,      // The size of the task stack specified as the number of * bytes.任务堆栈的大小(字节)
-    NULL,      // Pointer that will be used as the parameter for the task * being created.  创建作为任务输入参数的指针
-    1,         // Priority of the task.  任务的优先级
-    NULL,      // Task handler.  任务句柄
-    0);        // Core where the task should run.  将任务挂载到指定内核
+    task1,     // タスクを実行する関数
+    "task1",   // スレッド名
+    4096,      // バイト数で指定されるタスク・スタックのサイズ
+    NULL,      // 作成されるタスクのパラメータとして使用されるポインタ。
+    1,         // タスクの優先順位。
+    NULL,      // タスクハンドラ。
+    0);        // タスクを実行するコア。
 
   // Task 2
   xTaskCreatePinnedToCore(
@@ -178,14 +496,17 @@ void setup() {
 
 }
 
+
+
 void loop() {
 
+  loopBLE();
 
   bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
-  bno.getEvent(&linearAccelData, Adafruit_BNO055::VECTOR_LINEARACCEL);
+  //bno.getEvent(&linearAccelData, Adafruit_BNO055::VECTOR_LINEARACCEL);
 
   printEvent(&orientationData);
-  printEvent(&linearAccelData);
+  //printEvent(&linearAccelData);
 
   // String str = "x:" + String(accX) + " target:" + String(rotationQuantity) + " rotationQuantity_total:" + String(rotationQuantity_total);
   // Serial.println(str);
@@ -199,6 +520,12 @@ void loop() {
 
 // --------------------------
 // *--- Functions ---
+
+
+void buttonState() {
+
+}
+
 
 // *--- Stepper BaCsics ---
 void turn_CW(int rotationQuantity, int rotationSpeed) // 時計回り
@@ -587,4 +914,17 @@ void printEvent(sensors_event_t *event)
 
   String str = "X:" + String(x) + "," + "Y:" + String(y) + "," + "Z:" + String(z);
   // Serial.println(str);
+
+  //Serial.println(x);
+  if (deviceConnected) { //接続されていたら
+    // 送信する値（仮の値）
+    /*uint8_t*/String valueToSend = String(roll);
+
+    // BLE通知を行う
+    pNotifyCharacteristic->setValue(valueToSend);
+    pNotifyCharacteristic->notify();
+
+    Serial.print("send");
+    Serial.println(valueToSend);
+  }
 }
