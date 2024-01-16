@@ -60,7 +60,7 @@ int rotationSpeed_min = 100; // 最遅
 int targetAngle = 0;                 // 目標角度（-45〜45度の範囲）
 int rotationQuantity = 0;            // センサ値に応じて動かすステップ数（角度からステップ数に変換）
 int rotationQuantity_total = 0;      // のべステップ数（現在地）
-int rotationQuantity_total_max = 50; // 振幅の最大値（片側分）
+int rotationQuantity_total_max = 100; // 振幅の最大値（片側分）
 
 // *--- センサ値関係 ---
 // 加速度
@@ -758,7 +758,7 @@ void stepRoll()
     // 必要な回転量（ステップ数）を計算
     // 差を絶対値になるようにしているため、roll値が-90~90度をとるところを0~180度で考えている
     // 例）1ステップ3.44の場合90度動くには 90/3.44 = 26.16ステップ
-    rotationQuantity = roundf(map(roll_diff, roll_diff_th_min, 20, 0, rotationQuantity_total_max * 2)); // 目標角度をステップ数に変換
+    rotationQuantity = roundf(map(roll_diff, roll_diff_th_min, roll_diff_th_max, 0, rotationQuantity_total_max * 2)); // 目標角度をステップ数に変換
     // rotationSpeed = roundf(map(roll_diff, roll_diff_th_min, 20, 100, 255));
     rotationSpeed = duty_max;                                    // 定数でよければ（仮）
     rotateWithSensorValue(dir, rotationQuantity, rotationSpeed); // 方向、回転量、スピード      // memo: 多分この3つはローカル変数にしておかないとごちゃごちゃになる
@@ -912,9 +912,9 @@ void printEvent(sensors_event_t *event)
     Serial.print("Unk:");
   }
 
-  //String str = "X:" + String(x) + "," + "Y:" + String(y) + "," + "Z:" + String(z);
+  String str = "X:" + String(x) + "," + "Y:" + String(y) + "," + "Z:" + String(z);
   // Serial.println(str);
-  String str = "accX:" + String(accX) + "," + "roll:" + String(roll);
+  //String str = "accX:" + String(accX) + "," + "roll:" + String(roll);
 
   //Serial.println(x);
   if (deviceConnected) { //接続されていたら
