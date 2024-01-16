@@ -75,8 +75,8 @@ int roll_old;    // 1loop前のroll値
 int roll_diff;   // 現roll値と1loop前のroll値の差（絶対値）0-180をとる
 
 // diffの閾値 絶対値がこれ以上の場合回転させる roll
-int roll_diff_th_min = 3;
-int roll_diff_th_max = 20;
+int roll_diff_th_min = 1;//3;
+int roll_diff_th_max = 10;//20;
 
 // 誇張係数（未使用）
 int expand = 1;
@@ -503,10 +503,10 @@ void loop() {
   loopBLE();
 
   bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
-  //bno.getEvent(&linearAccelData, Adafruit_BNO055::VECTOR_LINEARACCEL);
+  bno.getEvent(&linearAccelData, Adafruit_BNO055::VECTOR_LINEARACCEL);
 
   printEvent(&orientationData);
-  //printEvent(&linearAccelData);
+  printEvent(&linearAccelData);
 
   // String str = "x:" + String(accX) + " target:" + String(rotationQuantity) + " rotationQuantity_total:" + String(rotationQuantity_total);
   // Serial.println(str);
