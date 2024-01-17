@@ -61,16 +61,19 @@ int targetAngle = 0;                 // 目標角度（-45〜45度の範囲）
 int rotationQuantity = 0;            // センサ値に応じて動かすステップ数（角度からステップ数に変換）
 int rotationQuantity_total = 0;      // のべステップ数（現在地）
 int rotationQuantity_total_max = 100; // 振幅の最大値（片側分）
+float roll_logBase = 1.0617;
 
 // *--- センサ値関係 ---
 // 加速度
 double accX = 0.0;
 double accX_th_min = 1.5; // 閾値
 double accX_th_max = 8;
+float accX_logBase = 1.0105;
 
 double accZ = 0.0;
 double accZ_th_min = 1.5; // 閾値
 double accZ_th_max = 8;
+float accZ_logBase = 1.0105;
 
 // 姿勢角
 double roll;     //-90~90の値を取る ただ普段人間の首はせいぜい-45~45くらいしか傾げないので、設計上は-45~45外は丸める
@@ -545,6 +548,12 @@ void loop() {
 // --------------------------
 // *--- Functions ---
 
+float logN(float x, float n) {
+  //底nのlogの結果を得る
+  // log(x) / log(n) を計算
+  return log(x) / log(n);
+}
+
 
 // *--- Stepper BaCsics ---
 void turn_CW(int rotationQuantity, int rotationSpeed) // 時計回り
@@ -777,7 +786,7 @@ void stepRoll()
     // 必要な回転量（ステップ数）を計算
     // 差を絶対値になるようにしているため、roll値が-90~90度をとるところを0~180度で考えている
     // 例）1ステップ3.44の場合90度動くには 90/3.44 = 26.16ステップ
-    rotationQuantity = roundf(map(roll_diff, roll_diff_th_min, roll_diff_th_max, 0, rotationQuantity_total_max * 2)); // 目標角度をステップ数に変換
+    rotationQuantity = roundf(logN(roll_diff, roll_logBase));//roundf(map(roll_diff, roll_diff_th_min, roll_diff_th_max, 0, rotationQuantity_total_max * 2)); // 目標角度をステップ数に変換
     // rotationSpeed = roundf(map(roll_diff, roll_diff_th_min, 20, 100, 255));
     rotationSpeed = duty_max;                                    // 定数でよければ（仮）
     rotateWithSensorValue(dir, rotationQuantity, rotationSpeed); // 方向、回転量、スピード      // memo: 多分この3つはローカル変数にしておかないとごちゃごちゃになる
@@ -821,7 +830,7 @@ void stepAccX()
     {
       accX_absolute = accX_th_max;
     }
-    rotationQuantity = roundf(map(accX_absolute, accX_th_min, accX_th_max, 0, rotationQuantity_total_max * 2));
+    rotationQuantity = roundf(logN(accX_absolute, accX_logBase));//roundf(map(accX_absolute, accX_th_min, accX_th_max, 0, rotationQuantity_total_max * 2));
     // rotationSpeed = roundf(map(accX_absolute, accX_th_min, accX_th_max, 100, 255));
     rotationSpeed = duty_max; // 定数でよければ（仮）
 
@@ -869,7 +878,7 @@ void stepAccZ()
     {
       accZ_absolute = accZ_th_max;
     }
-    rotationQuantity = roundf(map(accZ_absolute, accZ_th_min, accZ_th_max, 0, rotationQuantity_total_max * 2));
+    rotationQuantity = roundf(logN(accZ_absolute, accZ_logBase));//roundf(map(accZ_absolute, accZ_th_min, accZ_th_max, 0, rotationQuantity_total_max * 2));
     // rotationSpeed = roundf(map(accZ_absolute, accZ_th_min, accZ_th_max, 100, 255));
     rotationSpeed = duty_max; // 定数でよければ（仮）
 
