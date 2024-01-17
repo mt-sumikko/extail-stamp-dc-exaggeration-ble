@@ -131,28 +131,25 @@ int ledTask = 0;
 void task1(void * pvParameters) { //Define the tasks to be executed in thread 1.  定义线程1内要执行的任务
   while (1) { //Keep the thread running.  使线程一直运行
 
-      switch (FSM)
-      {
-          case 0:
-          Serial.print("c0");
-            stepRoll();
-            break;
+    switch (FSM)
+    {
+      case 0:
+        stepRoll();
+        break;
 
-          case 1:
-          Serial.print("c1");
-            stepAccX();
-            break;
+      case 1:
+        stepAccX();
+        break;
 
-          case 2:
-          Serial.print("c2");
-            stepAccZ();
-            break;
+      case 2:
+        stepAccZ();
+        break;
 
-          default:
-            Serial.print("default");//適度に待つ
-            delay(100);
-            continue; // スイッチ内で待ち時間がない場合は、次のループに進むようにcontinueを追加
-        }
+      default:
+        //適度に待つ
+        delay(100);
+        continue; // スイッチ内で待ち時間がない場合は、次のループに進むようにcontinueを追加
+    }
 
 
     vTaskDelay(5); // ステッパーがセンサ値に応じて回転する1セット分を待つインターバル
@@ -547,11 +544,6 @@ void loop() {
 
 // --------------------------
 // *--- Functions ---
-
-
-void buttonState() {
-
-}
 
 
 // *--- Stepper BaCsics ---
