@@ -68,6 +68,10 @@ double accX = 0.0;
 double accX_th_min = 1.5; // 閾値
 double accX_th_max = 8;
 
+double accZ = 0.0;
+double accZ_th_min = 1.5; // 閾値
+double accZ_th_max = 8;
+
 // 姿勢角
 double roll;     //-90~90の値を取る ただ普段人間の首はせいぜい-45~45くらいしか傾げないので、設計上は-45~45外は丸める
 int roll_roundf; // rollを四捨五入した整数値
@@ -75,8 +79,8 @@ int roll_old;    // 1loop前のroll値
 int roll_diff;   // 現roll値と1loop前のroll値の差（絶対値）0-180をとる
 
 // diffの閾値 絶対値がこれ以上の場合回転させる roll
-int roll_diff_th_min = 1;//3;
-int roll_diff_th_max = 10;//20;
+int roll_diff_th_min = 3;
+int roll_diff_th_max = 20;
 
 // 誇張係数（未使用）
 int expand = 1;
@@ -126,8 +130,31 @@ int ledTask = 0;
 // task1：センサ値に応じてステッパーを回す
 void task1(void * pvParameters) { //Define the tasks to be executed in thread 1.  定义线程1内要执行的任务
   while (1) { //Keep the thread running.  使线程一直运行
-    stepRoll();
-    //stepAccX();
+
+      switch (FSM)
+      {
+          case 0:
+          Serial.print("c0");
+            stepRoll();
+            break;
+
+          case 1:
+          Serial.print("c1");
+            stepAccX();
+            break;
+
+          case 2:
+          Serial.print("c2");
+            stepAccZ();
+            break;
+
+          default:
+            Serial.print("default");//適度に待つ
+            delay(100);
+            continue; // スイッチ内で待ち時間がない場合は、次のループに進むようにcontinueを追加
+        }
+
+
     vTaskDelay(5); // ステッパーがセンサ値に応じて回転する1セット分を待つインターバル
     // 0でもうごきはするが挙動が不安定になりやすいので5か10くらいにしておく。50だと流石にカクつく
   }
@@ -601,7 +628,7 @@ void printSteps(int dir, int roundf_, int old, int diff)
   }
 }
 
-void printSteps_accX(int dir, double accX_absolute)
+void printSteps_acc(int dir, double accX_absolute)
 {
   if (rotationQuantity != 0)
   {
@@ -802,7 +829,7 @@ void stepAccX()
     {
       accX_absolute = accX_th_max;
     }
-    rotationQuantity = roundf(map(accX_absolute, accX_th_min, accX_th_max, 3, 20));
+    rotationQuantity = roundf(map(accX_absolute, accX_th_min, accX_th_max, 0, rotationQuantity_total_max * 2));
     // rotationSpeed = roundf(map(accX_absolute, accX_th_min, accX_th_max, 100, 255));
     rotationSpeed = duty_max; // 定数でよければ（仮）
 
@@ -811,7 +838,7 @@ void stepAccX()
     if (rotationQuantity != 0)
     {
       // accXには回ってる間にかなりの確率で次の値が代入される。printをaccXですると回転した時の値とずれるので、accX_absoluteでする。
-      printSteps_accX(dir, accX_absolute);
+      printSteps_acc(dir, accX_absolute);
     }
   }
   else
@@ -819,6 +846,56 @@ void stepAccX()
     rotationQuantity = 0;
   }
 }
+
+
+// z軸方向の加速度値の処理
+void stepAccZ()
+{
+  // 回転方向決める
+  if (accZ < 0)
+  {
+    dir = -1; // CW
+  }
+  else if (accZ > 0)
+  {
+    dir = 1; // CCW
+  }
+  else
+  {
+    dir = 0;
+    return;
+  }
+
+  // accZ_absolute の計算
+  float accZ_absolute = abs(accZ);
+
+  // accZ_absolute の値に応じて rotationQuantity, rotationSpeed を割り当てるコードを書く
+  if (accZ_absolute > accZ_th_min)
+  {
+
+    if (accZ_absolute > accZ_th_max) // 上限を8m/s^2として、それ以上の扱いは8にまるめる
+    {
+      accZ_absolute = accZ_th_max;
+    }
+    rotationQuantity = roundf(map(accZ_absolute, accZ_th_min, accZ_th_max, 0, rotationQuantity_total_max * 2));
+    // rotationSpeed = roundf(map(accZ_absolute, accZ_th_min, accZ_th_max, 100, 255));
+    rotationSpeed = duty_max; // 定数でよければ（仮）
+
+    rotateWithSensorValue(dir, rotationQuantity, rotationSpeed);
+
+    if (rotationQuantity != 0)
+    {
+      // accZには回ってる間にかなりの確率で次の値が代入される。printをaccZですると回転した時の値とずれるので、accZ_absoluteでする。
+      printSteps_acc(dir, accZ_absolute);
+    }
+  }
+  else
+  {
+    rotationQuantity = 0;
+  }
+}
+
+
 
 // 差分計算・回転方向確定 暫定roll用の関数
 // memo：値がひっくり返ってしまった時に無視する処理を入れておきたいが、なくても大丈夫そうかも
@@ -898,6 +975,7 @@ void printEvent(sensors_event_t *event)
     y = event->acceleration.y;
     z = event->acceleration.z;
     accX = x;
+    accZ = z;
   }
   else if (event->type == SENSOR_TYPE_GRAVITY)
   {
@@ -912,20 +990,20 @@ void printEvent(sensors_event_t *event)
     Serial.print("Unk:");
   }
 
-  String str = "X:" + String(x) + "," + "Y:" + String(y) + "," + "Z:" + String(z);
-  // Serial.println(str);
-  //String str = "accX:" + String(accX) + "," + "roll:" + String(roll);
+  /* String str = "X:" + String(x) + "," + "Y:" + String(y) + "," + "Z:" + String(z);
+    // Serial.println(str);
+    //String str = "accX:" + String(accX) + "," + "roll:" + String(roll);
 
-  //Serial.println(x);
-  if (deviceConnected) { //接続されていたら
-    // 送信する値（仮の値）
-    /*uint8_t*/String valueToSend = String(str);
+    //Serial.println(x);
+    if (deviceConnected) { //接続されていたら
+     // 送信する値（仮の値）
+     String valueToSend = String(str);
 
-    // BLE通知を行う
-    pNotifyCharacteristic->setValue(valueToSend);
-    pNotifyCharacteristic->notify();
+     // BLE通知を行う
+     pNotifyCharacteristic->setValue(valueToSend);
+     pNotifyCharacteristic->notify();
 
-    Serial.print("send");
-    Serial.println(valueToSend);
-  }
+     Serial.print("send");
+     Serial.println(valueToSend);
+    }*/
 }
