@@ -209,7 +209,7 @@ void task3(void * pvParameters) {
     if (btnState == 0 && btnState_old == 1) {
       Serial.printf("Button Pressed", btnState);
       Serial.println("");
-
+      ledTask = 5;
 
       if (deviceConnected) { //接続されていたら
         // 送信する値（仮の値）
