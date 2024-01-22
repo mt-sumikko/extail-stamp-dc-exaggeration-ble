@@ -139,17 +139,17 @@ void task1(void * pvParameters) { //Define the tasks to be executed in thread 1.
     {
       case 0:
         stepRoll();
-        Serial.print("c0");
+        //Serial.print("c0");
         break;
 
       case 1:
         stepAccX();
-        Serial.print("c1");
+        //Serial.print("c1");
         break;
 
       case 2:
         stepAccZ();
-        Serial.print("c2");
+        //Serial.print("c2");
         break;
 
       default:
