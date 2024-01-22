@@ -110,7 +110,7 @@ bool oldDeviceConnected = false;
 
 // ### 心拍系
 //BLE通信で送られてきた値をintに直して保管（初期値は標準的な値）
-int volume = 0;
+int receivedValue = 0;
 bool flag_volume = false;
 
 
@@ -349,26 +349,26 @@ void detectReceivedDataType(boolean& noMoreEvent, std::string rxValue, String in
   //そうしないと呼び出し元の onWrite 関数におけるnoMoreEventの値は更新されないので、無限ループに陥ってしまう
   int from = 0;
   int index = rxValue.find(index_str.c_str(), from);
-  Serial.println("detect" + index);
+  Serial.print("detect... "/* + index*/);
   // もし見つからなければ
   if (index < 0)
   {
     // 処理が終了したと判断してフラグをセット
     noMoreEvent = true;
-    volume = 0;
+    receivedValue = 0;
     flag_volume = false;
-    Serial.println("end");
+    Serial.println("---end---");
   }
   // もし見つかったら
   else
   {
     // 次に処理する読み取り開始位置を更新
     from = index + 1;
-    // '*'以降の数字文字列を取り出す
+    // index_str 以降の数字文字列を取り出す
     const char* valuePtr = rxValue.c_str() + index + 1;
-    volume = atoi(valuePtr);
+    receivedValue = atoi(valuePtr);
     flag_volume = true;
-    Serial.println("volume: " + String(volume));//ここで数字拾うだけだと loopの中で直近の1以上の値を持ち続けてしまう？
+    Serial.println("receivedValue: " + String(receivedValue) + ", index: " + index_str); //ここで数字拾うだけだと loopの中で直近の1以上の値を持ち続けてしまう？
   }
 
 }
