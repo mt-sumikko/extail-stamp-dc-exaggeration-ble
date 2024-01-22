@@ -37,6 +37,7 @@ sensors_event_t orientationData, angVelocityData, linearAccelData, magnetometerD
 //BLE test
 String sampleText[] = {"GoodMorning", "Hello", "GoodBye", "GoodNight"};
 uint8_t FSM = 0;    //Store the number of key presses.  存储按键按下次数
+int SensingTarget = 0;
 
 // *--- DC motor ---
 #define IN1 32 // モーター1正転信号端子
@@ -134,18 +135,21 @@ int ledTask = 0;
 void task1(void * pvParameters) { //Define the tasks to be executed in thread 1.  定义线程1内要执行的任务
   while (1) { //Keep the thread running.  使线程一直运行
 
-    switch (FSM)
+    switch (SensingTarget)
     {
       case 0:
         stepRoll();
+        Serial.print("c0");
         break;
 
       case 1:
         stepAccX();
+        Serial.print("c1");
         break;
 
       case 2:
         stepAccZ();
+        Serial.print("c2");
         break;
 
       default:
@@ -369,6 +373,10 @@ void detectReceivedDataType(boolean& noMoreEvent, std::string rxValue, String in
     receivedValue = atoi(valuePtr);
     flag_volume = true;
     Serial.println("receivedValue: " + String(receivedValue) + ", index: " + index_str); //ここで数字拾うだけだと loopの中で直近の1以上の値を持ち続けてしまう？
+
+    if (index_str == ">") {
+      SensingTarget = receivedValue;
+    }
   }
 
 }
