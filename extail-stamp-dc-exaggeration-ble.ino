@@ -37,6 +37,7 @@ sensors_event_t orientationData, angVelocityData, linearAccelData, magnetometerD
 //BLE test
 String sampleText[] = {"GoodMorning", "Hello", "GoodBye", "GoodNight"};
 uint8_t FSM = 0;    //Store the number of key presses.  存储按键按下次数
+int SensingTarget = 0;
 
 // *--- DC motor ---
 #define IN1 32 // モーター1正転信号端子
@@ -107,7 +108,7 @@ bool oldDeviceConnected = false;
 
 // ### 心拍系
 //BLE通信で送られてきた値をintに直して保管（初期値は標準的な値）
-int volume = 0;
+int receivedValue = 0;
 bool flag_volume = false;
 
 
@@ -128,28 +129,29 @@ int ledTask = 0;
 // --------------------------
 // *--- Multithread tasks ---
 // task1：センサ値に応じてステッパーを回す
+// task1：センサ値に応じてステッパーを回す
 void task1(void * pvParameters) { //Define the tasks to be executed in thread 1.  定义线程1内要执行的任务
   while (1) { //Keep the thread running.  使线程一直运行
 
-    switch (FSM)
+    switch (SensingTarget)
     {
       case 0:
-        //Serial.print("c0");
         stepRoll();
+        //Serial.print("c0");
         break;
 
       case 1:
-        //Serial.print("c1");
         stepAccX();
+        //Serial.print("c1");
         break;
 
       case 2:
-        //Serial.print("c2");
         stepAccZ();
+        //Serial.print("c2");
         break;
 
       default:
-        //Serial.print("default");//適度に待つ
+        //適度に待つ
         delay(100);
         continue; // スイッチ内で待ち時間がない場合は、次のループに進むようにcontinueを追加
     }
@@ -349,26 +351,30 @@ void detectReceivedDataType(boolean& noMoreEvent, std::string rxValue, String in
   //そうしないと呼び出し元の onWrite 関数におけるnoMoreEventの値は更新されないので、無限ループに陥ってしまう
   int from = 0;
   int index = rxValue.find(index_str.c_str(), from);
-  Serial.println("detect" + index);
+  Serial.print("detect... "/* + index*/);
   // もし見つからなければ
   if (index < 0)
   {
     // 処理が終了したと判断してフラグをセット
     noMoreEvent = true;
-    volume = 0;
+    receivedValue = 0;
     flag_volume = false;
-    Serial.println("end");
+    Serial.println("---end---");
   }
   // もし見つかったら
   else
   {
     // 次に処理する読み取り開始位置を更新
     from = index + 1;
-    // '*'以降の数字文字列を取り出す
+    // index_str 以降の数字文字列を取り出す
     const char* valuePtr = rxValue.c_str() + index + 1;
-    volume = atoi(valuePtr);
+    receivedValue = atoi(valuePtr);
     flag_volume = true;
-    Serial.println("volume: " + String(volume));//ここで数字拾うだけだと loopの中で直近の1以上の値を持ち続けてしまう？
+    Serial.println("receivedValue: " + String(receivedValue) + ", index: " + index_str); //ここで数字拾うだけだと loopの中で直近の1以上の値を持ち続けてしまう？
+
+    if (index_str == ">") {
+      SensingTarget = receivedValue;
+    }
   }
 
 }
