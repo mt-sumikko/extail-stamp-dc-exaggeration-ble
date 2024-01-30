@@ -538,11 +538,12 @@ void loop() {
 
   if (SensingTarget == 0) {
     bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
-    bno.getEvent(&linearAccelData, Adafruit_BNO055::VECTOR_LINEARACCEL);
+    printEvent(&orientationData);
 
   } else {
 
-    printEvent(&orientationData);
+
+    bno.getEvent(&linearAccelData, Adafruit_BNO055::VECTOR_LINEARACCEL);
     printEvent(&linearAccelData);
   }
 
