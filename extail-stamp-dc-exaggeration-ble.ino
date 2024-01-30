@@ -637,24 +637,28 @@ void printSteps(int dir, int roundf_, int old, int diff)
   }
 }
 
-void printSteps_acc(int dir, double accX_absolute)
+void printSteps_acc(int dir, double accX_absolute, int component)
 {
   if (rotationQuantity != 0)
   {
     String str;
-    if (dir == 1)
-    {
-      str = "accX: " + String(accX_absolute) + " target: " + String(rotationQuantity) + " rQuantity_total:" + String(rotationQuantity_total) /*+ " rSpeed:" + String(rotationSpeed)*/;
+
+    if (component == 0) {
+      str += "accX:";
+    } else {
+      str += "accZ:";
     }
-    else
+    if (dir == -1)
     {
-      str = "accX:-" + String(accX_absolute) + " target:- " + String(rotationQuantity) + " rQuantity_total:" + String(rotationQuantity_total) /*+ " rSpeed:" + String(rotationSpeed)*/;
+      str += "-";
     }
-    Serial.print(str);
-    Serial.print(" ");
-    Serial.println(back);
+
+    str += String(accX_absolute) + " target: " + String(rotationQuantity) + " rQuantity_total:" + String(rotationQuantity_total) /*+ " rSpeed:" + String(rotationSpeed)*/;
+
+    Serial.println(str);
   }
 }
+
 
 
 
@@ -847,7 +851,7 @@ void stepAccX()
     if (rotationQuantity != 0)
     {
       // accXには回ってる間にかなりの確率で次の値が代入される。printをaccXですると回転した時の値とずれるので、accX_absoluteでする。
-      printSteps_acc(dir, accX_absolute);
+      printSteps_acc(dir, accX_absolute, 0);
     }
   }
   else
@@ -895,7 +899,7 @@ void stepAccZ()
     if (rotationQuantity != 0)
     {
       // accZには回ってる間にかなりの確率で次の値が代入される。printをaccZですると回転した時の値とずれるので、accZ_absoluteでする。
-      printSteps_acc(dir, accZ_absolute);
+       printSteps_acc(dir, accZ_absolute, 1);
     }
   }
   else
