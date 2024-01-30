@@ -62,19 +62,22 @@ int targetAngle = 0;                 // 目標角度（-45〜45度の範囲）
 int rotationQuantity = 0;            // センサ値に応じて動かすステップ数（角度からステップ数に変換）
 int rotationQuantity_total = 0;      // のべステップ数（現在地）
 int rotationQuantity_total_max = 100; // 振幅の最大値（片側分）
-float roll_logBase = 1.0617;
 
 // *--- センサ値関係 ---
 // 加速度
 double accX = 0.0;
 double accX_th_min = 1.5; // 閾値
 double accX_th_max = 8;
-float accX_logBase = 1.0105;
 
 double accZ = 0.0;
 double accZ_th_min = 1.5; // 閾値
 double accZ_th_max = 8;
+
+
+float roll_logBase = 1.0617;//20-50
+float accX_logBase = 1.0105;//8-200
 float accZ_logBase = 1.0105;
+
 
 // 姿勢角
 double roll;     //-90~90の値を取る ただ普段人間の首はせいぜい-45~45くらいしか傾げないので、設計上は-45~45外は丸める
@@ -213,7 +216,7 @@ void task3(void * pvParameters) {
     if (btnState == 0 && btnState_old == 1) {
       Serial.printf("Button Pressed", btnState);
       Serial.println("");
-      ledTask = 5;
+
 
       if (deviceConnected) { //接続されていたら
         // 送信する値（仮の値）
@@ -308,6 +311,7 @@ class ServerCallbacks : public NimBLEServerCallbacks
     };
 };
 
+
 //特性アクションのハンドラクラス
 //BLE Rceive　セントラル側からのwriteやnotifyでペリフェラル側から通知などの処理もクラスにしておきます。
 class CharacteristicCallbacks : public BLECharacteristicCallbacks
@@ -320,7 +324,7 @@ class CharacteristicCallbacks : public BLECharacteristicCallbacks
         String rxValue_string = rxValue.c_str();//std::stringはそのままではprintf()で表示できません。表示するには.c_str()で変換します。
         Serial.print("received: ");
         Serial.println(rxValue_string);
-
+        ledTask = 4;
         //pNotifyCharacteristic->setValue(rxValue_string);//これはAtom側でreceive(iOSからAtomへの書き込み)成功したらその値をiOSに送り直すやつ、つまり確認用途であり、必須では無い。
         //pNotifyCharacteristic->notify();
 
@@ -537,11 +541,16 @@ void loop() {
 
   loopBLE();
 
-  bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
-  bno.getEvent(&linearAccelData, Adafruit_BNO055::VECTOR_LINEARACCEL);
+  if (SensingTarget == 0) {
+    bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
+    printEvent(&orientationData);
 
-  printEvent(&orientationData);
-  printEvent(&linearAccelData);
+  } else {
+
+
+    bno.getEvent(&linearAccelData, Adafruit_BNO055::VECTOR_LINEARACCEL);
+    printEvent(&linearAccelData);
+  }
 
   // String str = "x:" + String(accX) + " target:" + String(rotationQuantity) + " rotationQuantity_total:" + String(rotationQuantity_total);
   // Serial.println(str);
@@ -556,12 +565,12 @@ void loop() {
 // --------------------------
 // *--- Functions ---
 
+
 float logN(float x, float n) {
   //底nのlogの結果を得る
   // log(x) / log(n) を計算
   return log(x) / log(n);
 }
-
 
 // *--- Stepper BaCsics ---
 void turn_CW(int rotationQuantity, int rotationSpeed) // 時計回り
@@ -630,9 +639,6 @@ void printSteps(int dir, int roundf_, int old, int diff)
 
     Serial.print(", total: ");
     Serial.print(rotationQuantity_total);
-
-    Serial.print(", back: ");
-    Serial.println(back);
     Serial.println();
   }
 }
@@ -658,9 +664,6 @@ void printSteps_acc(int dir, double accX_absolute, int component)
     Serial.println(str);
   }
 }
-
-
-
 
 
 
@@ -798,7 +801,7 @@ void stepRoll()
     // 必要な回転量（ステップ数）を計算
     // 差を絶対値になるようにしているため、roll値が-90~90度をとるところを0~180度で考えている
     // 例）1ステップ3.44の場合90度動くには 90/3.44 = 26.16ステップ
-    rotationQuantity = roundf(logN(roll_diff, roll_logBase));//roundf(map(roll_diff, roll_diff_th_min, roll_diff_th_max, 0, rotationQuantity_total_max * 2)); // 目標角度をステップ数に変換
+    rotationQuantity = roundf(logN(roll_diff, roll_logBase));  // 目標角度をステップ数に変換
     // rotationSpeed = roundf(map(roll_diff, roll_diff_th_min, 20, 100, 255));
     rotationSpeed = duty_max;                                    // 定数でよければ（仮）
     rotateWithSensorValue(dir, rotationQuantity, rotationSpeed); // 方向、回転量、スピード      // memo: 多分この3つはローカル変数にしておかないとごちゃごちゃになる
@@ -842,7 +845,7 @@ void stepAccX()
     {
       accX_absolute = accX_th_max;
     }
-    rotationQuantity = roundf(logN(accX_absolute, accX_logBase));//roundf(map(accX_absolute, accX_th_min, accX_th_max, 0, rotationQuantity_total_max * 2));
+    rotationQuantity = roundf(logN(accX_absolute, accX_logBase));
     // rotationSpeed = roundf(map(accX_absolute, accX_th_min, accX_th_max, 100, 255));
     rotationSpeed = duty_max; // 定数でよければ（仮）
 
@@ -890,7 +893,7 @@ void stepAccZ()
     {
       accZ_absolute = accZ_th_max;
     }
-    rotationQuantity = roundf(logN(accZ_absolute, accZ_logBase));//roundf(map(accZ_absolute, accZ_th_min, accZ_th_max, 0, rotationQuantity_total_max * 2));
+    rotationQuantity = roundf(logN(accZ_absolute, accZ_logBase));
     // rotationSpeed = roundf(map(accZ_absolute, accZ_th_min, accZ_th_max, 100, 255));
     rotationSpeed = duty_max; // 定数でよければ（仮）
 
@@ -899,7 +902,7 @@ void stepAccZ()
     if (rotationQuantity != 0)
     {
       // accZには回ってる間にかなりの確率で次の値が代入される。printをaccZですると回転した時の値とずれるので、accZ_absoluteでする。
-       printSteps_acc(dir, accZ_absolute, 1);
+      printSteps_acc(dir, accZ_absolute, 1);
     }
   }
   else
@@ -950,7 +953,6 @@ void printEvent(sensors_event_t *event)
     x = event->acceleration.x;
     y = event->acceleration.y;
     z = event->acceleration.z;
-    accX = x;
   }
   else if (event->type == SENSOR_TYPE_ORIENTATION)
   {
@@ -996,27 +998,26 @@ void printEvent(sensors_event_t *event)
     x = event->acceleration.x;
     y = event->acceleration.y;
     z = event->acceleration.z;
-    // accX = x;
   }
   else
   {
     Serial.print("Unk:");
   }
 
-  /* String str = "X:" + String(x) + "," + "Y:" + String(y) + "," + "Z:" + String(z);
-    // Serial.println(str);
-    //String str = "accX:" + String(accX) + "," + "roll:" + String(roll);
+  String str = "X:" + String(x) + "," + "Y:" + String(y) + "," + "Z:" + String(z);
+  // Serial.println(str);
+  //String str = "accX:" + String(accX) + "," + "roll:" + String(roll);
 
-    //Serial.println(x);
-    if (deviceConnected) { //接続されていたら
-     // 送信する値（仮の値）
-     String valueToSend = String(str);
+  //Serial.println(x);
+  if (deviceConnected) { //接続されていたら
+    // 送信する値（仮の値）
+    String valueToSend = String(str);
 
-     // BLE通知を行う
-     pNotifyCharacteristic->setValue(valueToSend);
-     pNotifyCharacteristic->notify();
+    // BLE通知を行う
+    pNotifyCharacteristic->setValue(valueToSend);
+    pNotifyCharacteristic->notify();
 
-     Serial.print("send");
-     Serial.println(valueToSend);
-    }*/
+    //Serial.print("send");
+    //Serial.println(valueToSend);
+  }
 }
