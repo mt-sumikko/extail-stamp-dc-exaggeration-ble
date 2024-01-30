@@ -538,7 +538,7 @@ void loop() {
   bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
   bno.getEvent(&linearAccelData, Adafruit_BNO055::VECTOR_LINEARACCEL);
 
-  printEvent(&orientationData);
+  //printEvent(&orientationData);
   printEvent(&linearAccelData);
 
   // String str = "x:" + String(accX) + " target:" + String(rotationQuantity) + " rotationQuantity_total:" + String(rotationQuantity_total);
@@ -634,26 +634,28 @@ void printSteps(int dir, int roundf_, int old, int diff)
   }
 }
 
-void printSteps_acc(int dir, double accX_absolute)
+void printSteps_acc(int dir, double accX_absolute, int component)
 {
   if (rotationQuantity != 0)
   {
     String str;
-    if (dir == 1)
-    {
-      str = "accX: " + String(accX_absolute) + " target: " + String(rotationQuantity) + " rQuantity_total:" + String(rotationQuantity_total) /*+ " rSpeed:" + String(rotationSpeed)*/;
+
+    if (component == 0) {
+      str += "accX:";
+    } else {
+      str += "accZ:";
     }
-    else
+    if (dir == -1)
     {
-      str = "accX:-" + String(accX_absolute) + " target:- " + String(rotationQuantity) + " rQuantity_total:" + String(rotationQuantity_total) /*+ " rSpeed:" + String(rotationSpeed)*/;
+      str += "-";
     }
+
+    str += String(accX_absolute) + " target: " + String(rotationQuantity) + " rQuantity_total:" + String(rotationQuantity_total) /*+ " rSpeed:" + String(rotationSpeed)*/;
+
     Serial.print(str);
     Serial.print(" ");
-    Serial.println(back);
   }
 }
-
-
 
 
 
@@ -844,7 +846,7 @@ void stepAccX()
     if (rotationQuantity != 0)
     {
       // accXには回ってる間にかなりの確率で次の値が代入される。printをaccXですると回転した時の値とずれるので、accX_absoluteでする。
-      printSteps_acc(dir, accX_absolute);
+      printSteps_acc(dir, accX_absolute, 0);
     }
   }
   else
@@ -892,7 +894,7 @@ void stepAccZ()
     if (rotationQuantity != 0)
     {
       // accZには回ってる間にかなりの確率で次の値が代入される。printをaccZですると回転した時の値とずれるので、accZ_absoluteでする。
-      printSteps_acc(dir, accZ_absolute);
+      printSteps_acc(dir, accZ_absolute, 1);
     }
   }
   else
@@ -989,27 +991,26 @@ void printEvent(sensors_event_t *event)
     x = event->acceleration.x;
     y = event->acceleration.y;
     z = event->acceleration.z;
-    // accX = x;
   }
   else
   {
     Serial.print("Unk:");
   }
 
-  /* String str = "X:" + String(x) + "," + "Y:" + String(y) + "," + "Z:" + String(z);
-    // Serial.println(str);
-    //String str = "accX:" + String(accX) + "," + "roll:" + String(roll);
+  String str = "X:" + String(x) + "," + "Y:" + String(y) + "," + "Z:" + String(z);
+  // Serial.println(str);
+  //String str = "accX:" + String(accX) + "," + "roll:" + String(roll);
 
-    //Serial.println(x);
-    if (deviceConnected) { //接続されていたら
-     // 送信する値（仮の値）
-     String valueToSend = String(str);
+  //Serial.println(x);
+  if (deviceConnected) { //接続されていたら
+    // 送信する値（仮の値）
+    String valueToSend = String(str);
 
-     // BLE通知を行う
-     pNotifyCharacteristic->setValue(valueToSend);
-     pNotifyCharacteristic->notify();
+    // BLE通知を行う
+    pNotifyCharacteristic->setValue(valueToSend);
+    pNotifyCharacteristic->notify();
 
-     Serial.print("send");
-     Serial.println(valueToSend);
-    }*/
+    //Serial.print("send");
+    //Serial.println(valueToSend);
+  }
 }
