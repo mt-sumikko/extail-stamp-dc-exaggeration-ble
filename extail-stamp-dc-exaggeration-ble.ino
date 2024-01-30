@@ -306,6 +306,7 @@ class ServerCallbacks : public NimBLEServerCallbacks
     };
 };
 
+
 //特性アクションのハンドラクラス
 //BLE Rceive　セントラル側からのwriteやnotifyでペリフェラル側から通知などの処理もクラスにしておきます。
 class CharacteristicCallbacks : public BLECharacteristicCallbacks
@@ -318,7 +319,7 @@ class CharacteristicCallbacks : public BLECharacteristicCallbacks
         String rxValue_string = rxValue.c_str();//std::stringはそのままではprintf()で表示できません。表示するには.c_str()で変換します。
         Serial.print("received: ");
         Serial.println(rxValue_string);
-
+        ledTask = 4;
         //pNotifyCharacteristic->setValue(rxValue_string);//これはAtom側でreceive(iOSからAtomへの書き込み)成功したらその値をiOSに送り直すやつ、つまり確認用途であり、必須では無い。
         //pNotifyCharacteristic->notify();
 
@@ -535,11 +536,15 @@ void loop() {
 
   loopBLE();
 
-  bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
-  bno.getEvent(&linearAccelData, Adafruit_BNO055::VECTOR_LINEARACCEL);
+  if (SensingTarget == 0) {
+    bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
+    bno.getEvent(&linearAccelData, Adafruit_BNO055::VECTOR_LINEARACCEL);
 
-  //printEvent(&orientationData);
-  printEvent(&linearAccelData);
+  } else {
+
+    printEvent(&orientationData);
+    printEvent(&linearAccelData);
+  }
 
   // String str = "x:" + String(accX) + " target:" + String(rotationQuantity) + " rotationQuantity_total:" + String(rotationQuantity_total);
   // Serial.println(str);
@@ -627,9 +632,6 @@ void printSteps(int dir, int roundf_, int old, int diff)
 
     Serial.print(", total: ");
     Serial.print(rotationQuantity_total);
-
-    Serial.print(", back: ");
-    Serial.println(back);
     Serial.println();
   }
 }
@@ -652,8 +654,7 @@ void printSteps_acc(int dir, double accX_absolute, int component)
 
     str += String(accX_absolute) + " target: " + String(rotationQuantity) + " rQuantity_total:" + String(rotationQuantity_total) /*+ " rSpeed:" + String(rotationSpeed)*/;
 
-    Serial.print(str);
-    Serial.print(" ");
+    Serial.println(str);
   }
 }
 
@@ -945,7 +946,6 @@ void printEvent(sensors_event_t *event)
     x = event->acceleration.x;
     y = event->acceleration.y;
     z = event->acceleration.z;
-    accX = x;
   }
   else if (event->type == SENSOR_TYPE_ORIENTATION)
   {
