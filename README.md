@@ -1,6 +1,7 @@
 # extail-stamp-dc-exaggeration-ble
-Prototype of program for Extail No. 4
+Prototype of program for Extail No. 4.
 
+The relationship between the sensor input and output is proportional in the master branch and logarithmic in the log branch.
 
 Refference:
 - Previous version: [Wearing demonstration by Prototype 3](https://github.com/mt-sumikko/extail-exaggeration-eval#reference-wearing-demo)
